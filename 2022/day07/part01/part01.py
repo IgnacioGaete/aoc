@@ -1,5 +1,189 @@
 import sys
 
+def main(argv):
+    program_name = argv.pop(0)
+    if len(argv) != 1:
+        print(f"[ERROR] Usage: {program_name} <input file>")
+        exit(1)
+    file_path = argv.pop(0)
+    sh = Shell(file_path)
+    sh.ls_all()
+    max_size = 100_000
+    result = sh.find("d", "/", lambda x: x.get_size() < max_size)
+    print(f"sum = {sum([dir.get_size() for dir in result])}")
+
+class Shell:
+    def __init__(self, file_path):
+        self.__tab = "  "
+        self.__current_dir = ""
+        self.__root = Directory("/", [], [])
+        cmds = Shell.__get_cmds(file_path)
+        for cmd in cmds:
+            if cmd.get_name() == "cd":
+                self.cd(cmd.get_argv()[0])
+            if cmd.get_name() == "ls":
+                lines = cmd.get_output().copy()
+                while len(lines) > 0:
+                    splited = lines.pop(0).split(" ")
+                    if splited[0] == "dir":
+                        self.mkdir(splited[1])
+                    else:
+                        self.mkfile(splited[1], int(splited[0]))
+
+    def cd(self, dir_name):
+        new_cd = None
+        if dir_name == "..":
+            if self.__current_dir == "/":
+                print(f"[ERROR] in Shell.cd(dir_name='{dir_name}'): Can't go back from root dir")
+                exit(1)
+            new_cd = "/".join(self.__current_dir.split("/")[:-1])
+            if new_cd == "":
+                new_cd = "/"
+        else:
+            if dir_name == "/":
+                new_cd = "/"
+            else:
+                if dir_name not in [dir.get_name() for dir in self.__get_cd().get_dirs()]:
+                    print(f"[ERROR] in Shell.cd(dir_name='{dir_name}'): Directory not found")
+                    print(f"        dirs: {self.__get_cd().get_dirs()}")
+                    exit(1)
+                if self.__current_dir == "/":
+                    new_cd = self.__current_dir + dir_name
+                else:
+                    new_cd = self.__current_dir + "/" + dir_name
+        print(f"[INFO] in Shell.cd(dir_name={dir_name}): '{self.__current_dir}' (old) -> '{new_cd}' (new)")
+        self.__current_dir = new_cd
+
+
+    def mkdir(self, dir_name):
+        self.__get_cd().mkdir(dir_name)
+
+    def mkfile(self, name, size):
+        self.__get_cd().mkfile(name, size)
+
+    def find(self, search_type, path, predicate):
+        result = []
+        old_cd = self.__current_dir
+        self.cd(path)
+        print(f"[INFO] find starts <-----------------")
+        if search_type == "d":
+            if predicate(self.__get_cd()):
+                result.append(self.__get_cd())
+            for dir in self.__get_cd().get_dirs():
+                result.extend(self.__find_recursive(search_type, dir, predicate))
+        self.__current_dir = old_cd
+        print(f"[INFO] find ends   <-----------------")
+        print(f"[INFO] results: {result}")
+        return result
+
+    def ls_all(self):
+        print(f"- {self.__root.get_name()} (dir, size={self.__root.get_size()})")
+        for dir in self.__root.get_dirs():
+            self.__ls_all_recursive(dir, 1)
+        for file in self.__root.get_files():
+            print(f"{self.__tab}- {file.get_name()} (file, size={file.get_size()})")
+
+    def __get_cd(self):
+        if self.__current_dir == "":
+            return Directory("", [], [self.__root])
+        if self.__current_dir == "/":
+            return self.__root
+        splited_cd_fullpath = self.__current_dir[1:].split("/")
+        next_dir = self.__root
+        while len(splited_cd_fullpath) > 0:
+            next_dir_name = splited_cd_fullpath.pop(0)
+            dir_found = False
+            for dir in next_dir.get_dirs():
+                if next_dir_name == dir.get_name():
+                    dir_found = True
+                    next_dir = dir
+                    break
+            if not dir_found:
+                print(f"[ERROR] in Shell.__get_cd(): Couldn't find dir")
+                print(f"        looking for: '{next_dir_name}'")
+                print(f"        in: {[dir.get_name() for dir in next_dir.get_dirs()]}")
+                print(f"        current dir: {self.__current_dir}")
+                exit(1)
+        return next_dir
+
+    def __ls_all_recursive(self, dir, level):
+        print(level * self.__tab + f"- {dir.get_name()} (dir, size={dir.get_size()})")
+        for sub_dir in dir.get_dirs():
+            Shell.__ls_all_recursive(self, sub_dir, level + 1)
+        for file in dir.get_files():
+            print((level + 1) * self.__tab + f"- {file.get_name()} (file, size={file.get_size()})")
+        
+    def __find_recursive(self, search_type, dir, predicate):
+        result = []
+        if search_type == "d":
+            if predicate(dir):
+                result.append(dir)
+            for sub_dir in dir.get_dirs():
+                result.extend(self.__find_recursive(search_type, sub_dir, predicate))
+        return result
+
+    @staticmethod
+    def __get_cmds(file_path):
+        result = []
+        with open(file_path, "r") as f:
+            lines = f.readlines()
+            while len(lines) > 0:
+                line_splited = lines.pop(0).strip().split(" ")
+                first_symbol = line_splited.pop(0)
+                if first_symbol == "$":
+                    cmd_name = line_splited.pop(0)
+                    cmd_argv = line_splited
+                    cmd_output = []
+                    if cmd_name == "ls":
+                        next_line = lines.pop(0)
+                        while not next_line.startswith("$"):
+                            cmd_output.append(next_line.strip())
+                            if len(lines) == 0:
+                                break
+                            next_line = lines.pop(0)
+                        if len(lines) > 0:
+                            lines.insert(0, next_line)
+                    result.append(Command(cmd_name, cmd_argv, cmd_output))
+        return result
+    
+
+class Command:
+    def __init__(self, name, argv, output):
+        self.__name = name
+        self.__argv = argv
+        self.__output = output
+    def get_name(self):
+        return self.__name
+    def get_argv(self):
+        return self.__argv
+    def get_output(self):
+        return self.__output
+
+class Directory:
+    def __init__(self, name, files, dirs):
+        self.__name = name
+        self.__files = files
+        self.__dirs = dirs
+    def __str__(self):
+        return f"'{self.__name}' (dir, size={self.get_size()})"
+    def __repr__(self):
+        return str(self)
+    def mkdir(self, name):
+        self.__dirs.append(Directory(name, [], []))
+    def mkfile(self, name, size):
+        self.__files.append(File(name, size))
+    def get_dirs(self):
+        return self.__dirs
+    def get_files(self):
+        return self.__files
+    def get_name(self):
+        return self.__name
+    def get_size(self):
+        size = sum([file.get_size() for file in self.__files])
+        for sub_dir in self.__dirs:
+            size += sub_dir.get_size()
+        return size
+
 class File:
     def __init__(self, name, size):
         self.__name = name
@@ -9,117 +193,5 @@ class File:
     def get_size(self):
         return self.__size
 
-class Directory:
-    def __init__(self, name, files, dirs):
-        self.__name = name
-        self.__files = files
-        self.__dirs = dirs
-    def __str__(self):
-        return f"dir{{ name:'{self.__name}', files:{self.__files}, dirs:{self.__dirs} }}"
-    def __repr__(self):
-        return str(self)
-    def get_name(self):
-        return self.__name
-    def get_size(self):
-        pass
-
-class Command:
-    def __init__(self, name, argv, output):
-        self.__name = name
-        self.__argv = argv
-        self.__output = output
-    def __str__(self):
-        return f"{{name: {self.__name}, argv: {self.__argv}, output: {self.__output}}}"
-    def __repr__(self):
-        return str(self)
-    def get_name(self):
-        return self.__name
-    def get_argv(self):
-        return self.__argv
-    def get_output(self):
-        return self.__output
-    def exec(self, fs):
-        if self.__name == "cd":
-            fs.cd(self.__argv[0])
-        if self.__name == "ls":
-            fs.ls(self.__output)
-    @staticmethod
-    def __is_command(line):
-        return line.startswith("$")
-    @staticmethod
-    def get_command_list(file_path):
-        command_list = []
-        with open(file_path, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-            while len(lines) > 0:
-                line = lines.pop(0).strip()
-                if Command.__is_command(line):
-                    splited = line.split(" ")[1:]
-                    name = splited.pop(0)
-                    argv = [splited.pop(0)] if name == "cd" else []
-                    output = []
-                    if name == "ls":
-                        next_line = lines.pop(0).strip()
-                        while not Command.__is_command(next_line):
-                            output.append(next_line)
-                            if len(lines) > 0:
-                                next_line = lines.pop(0).strip()
-                            else:
-                                next_line = None
-                                break
-                        if next_line != None:
-                            lines.insert(0, next_line)
-                    command_list.append(Command(name, argv, output))
-        return command_list
-
-class FileSystem:
-    def __init__(self):
-        self.__files = []
-        self.__dirs = []
-        self.__dirs.append(Directory("/", [], []))
-        self.__dirs.append(Directory("a", [], []))
-        self.__dirs.append(Directory("d", [], []))
-        self.__current_dir = None
-    def cd(self, dir_name):
-        print(f"before cd '{dir_name}': '{self.__current_dir}'")
-        if dir_name == ".." and self.__current_dir != None and self.__current_dir != "/":
-            splited = self.__current_dir.split("/")[:-1]
-            self.__current_dir = "/".join(splited) if len(splited) > 2 else "/"
-        if dir_name in [dir.get_name() for dir in self.__dirs]:
-            if self.__current_dir == None:
-                self.__current_dir = dir_name
-            else:
-                self.__current_dir += dir_name if self.__current_dir == "/" else f"/{dir_name}"
-        print(f"after  cd '{dir_name}': '{self.__current_dir}'")
-    def ls(self, output_list):
-        for output in output_list:
-            first, second = output.split(" ")
-            if first == "dir":
-                self.__dirs.append(Directory(second, [], []))
-            else:
-                self.__files.append(File(second, int(first)))
-    def get_dir_list(self, max_size):
-        self.__current_dir = None
-        return FileSystem.__get_dir_list_recursive(self.__dirs, max_size, [])
-    @staticmethod
-    def __get_dir_list_recursive(dirs, max_size, current_list):
-        for dir in self.__dirs
-
-def main(argc, argv):
-    if(argc < 2):
-        print("[ERROR] Input file not provided")
-        print(f"[INFO] Usage: {argv[0]} <input_file>")
-        return
-    file_path = argv[1]
-    commands = Command.get_command_list(file_path)
-    fs = FileSystem()
-    for command in commands:
-        command.exec(fs)
-    dir_list = fs.get_dir_list(100000)
-    #sum = 0
-    #for dir in dir_list:
-    #    sum += dir.get_size()
-    #print(f"sum = {sum}")
-
 if __name__ == "__main__":
-    main(len(sys.argv), sys.argv)
+    main(sys.argv)
