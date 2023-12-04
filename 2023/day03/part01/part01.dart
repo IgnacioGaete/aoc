@@ -1,79 +1,53 @@
 import 'dart:io';
-import 'dart:math';
 
 void main(List<String> args) {
   if (args.length != 1) {
     print("[ERROR] Usage: ${Platform.script.path.split("/").last} <input text>");
     exit(1);
   }
-  Map<Point, Entry> map = getPointToEntryMap(args.first);
-  //print(map);
-  Set<Entry> partNumbers = getPartEntries(args.first, map);
-  //print(partNumbers);
-  int sum = partNumbers.map((e) => e.value).toList().reduce((value, element) => value + element);
+  List<int> partNumbers = getPartNumbers(args.first);
+  int sum = partNumbers.reduce((value, element) => value + element);
   print("Result: $sum");
 }
 
-class Entry {
-  Entry(int id, int value) {
-    this.value = value;
-    this.id = id;
-  }
-  String toString() => "Entry(id=${this.id}, value=${this.value})";
-  bool operator==(Object other) => (other as Entry).id == this.id;
-  int get hashCode => this.id;
-  int value = -1;
-  int id = -1;
-}
-
-Map<Point, Entry> getPointToEntryMap(String filePath) {
-  Map<Point, Entry> map = Map();
+List<int> getPartNumbers(String filePath) {
+  List<int> partNumbers = [];
   List<String> lines = File(filePath).readAsLinesSync();
-  int id = 0;
   for (int y = 0; y < lines.length; y++) {
     String stringNumb = "";
-    List<Point> numberSpan = [];
     for (int x = 0; x < lines[y].length; x++) {
       if (isDigit(lines[y][x])) {
         stringNumb += lines[y][x];
-        numberSpan.add(Point(x, y));
-      } else {
+      }
+      if (x == lines[y].length - 1 || !isDigit(lines[y][x])) {
         if (stringNumb.isNotEmpty) {
-          int numberValue = int.parse(stringNumb);
-          for (Point key in numberSpan) {
-            map[key] = Entry(id, numberValue);
+          int xn = x - stringNumb.length + (x == lines[y].length - 1 && isDigit(lines[y][x])? 1 : 0);
+          int yn = y;
+          List<String> neighbors = getNeighbors(xn, yn, stringNumb, filePath);
+          if (neighbors.any((neighbor) => isSymbol(neighbor))) {
+            partNumbers.add(int.parse(stringNumb));
           }
           stringNumb = "";
-          numberSpan.clear();
-          id++;
         }
       }
     }
   }
-  return map;
+  return partNumbers;
 }
 
-
-Set<Entry> getPartEntries(String filePath, Map<Point, Entry> map) {
-  Set<Entry> partEntries = Set();
+List<String> getNeighbors(int xn, int yn, String stringNumb, String filePath) {
+  List<String> neighbors = [];
   List<String> lines = File(filePath).readAsLinesSync();
-  for (int y = 0; y < lines.length; y++) {
-    for (int x = 0; x < lines[y].length; x++) {
-      if (isSymbol(lines[y][x])) {
-        partEntries.addAll(getNeighbors(x, y, map));
-      }
-    }
-  }
-  return partEntries;
-}
-
-Set<Entry> getNeighbors(int xs, int ys, Map<Point, Entry> map) {
-  Set<Entry> neighbors = Set();
-  for (int y = -1; y < 2; y++) {
-    for (int x = -1; x < 2; x++) {
-      Point key = Point(xs + x, ys + y);
-      if (map.containsKey(key)) {
-        neighbors.add(Entry(map[key]!.id, map[key]!.value));
+  int height = lines.length;
+  int width = lines.first.length;
+  for (int y = -1; y <= 1; y++) {
+    for (int x = -1; x <= stringNumb.length ; x++) {
+      int ys = yn + y;
+      int xs = xn + x;
+      if (ys >= 0 && ys < height && xs >= 0 && xs < width) {
+        if (!(ys == yn && xs >= xn && xs <= xn + stringNumb.length - 1)) {
+          neighbors.add(lines[ys][xs]);
+        }
       }
     }
   }
