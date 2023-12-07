@@ -9,6 +9,7 @@ class Card {
     int points = matches.length > 0 ? 1 << matches.length - 1 : 0;
     return points;
   }
+  // ignore: unused_field
   int _id = -1;
   List<int> _wNumbers = [];
   List<int> _pNumbers = [];
