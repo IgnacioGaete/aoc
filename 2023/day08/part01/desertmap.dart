@@ -31,23 +31,10 @@ class DesertMap {
   }
 
   int getEscapeStepsCount() {
-    Node? cursor = _rootNode;
+    Node? cursor = _searchNode(_rootNode, "AAA");
     int count = 0;
-    int prevCount = 0;
-    String values = "";
-    File f = File("output.txt");
-    f.writeAsStringSync("");
     while (cursor != null && cursor.name != "ZZZ") {
-      if (cursor.name == "BRR") {
-        print("prevDiff: ${count - prevCount}");
-        prevCount = count;
-        if (values.isNotEmpty) {
-          f.writeAsStringSync("$count: $values\n", mode: FileMode.append);
-          values = "";
-        }
-      }
       String nextValue = _directions[count % _directions.length] == "R" ? cursor.rightName : cursor.leftName;
-      values += cursor.name;
       cursor = _searchNode(_rootNode, nextValue);
       count++;
     }
