@@ -61,7 +61,7 @@ class DesertMap {
     if (cursor == null) {
       return;
     }
-    int comp = node.value - cursor.value;
+    int comp = node.name.compareTo(cursor.name);
     if (comp == 0) {
       print("[WARN] Found same value while creating a node: value='${node.name}'");
       return;
@@ -87,8 +87,7 @@ class DesertMap {
       print("[ERROR] Couldn't find value '$name'");
       exit(1);
     }
-    int value = Node.valueFromName(name);
-    int comp = value - cursor.value;
+    int comp = name.compareTo(cursor.name);
     if (comp == 0) {
       return cursor;
     }

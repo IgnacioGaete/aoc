@@ -2,8 +2,6 @@ import 'dart:io';
 
 class Node {
   static const String space = " ";
-  static const int base = 26;
-  static int valueFromName(String name) => name.codeUnitAt(2) + name.codeUnitAt(1) * base + name.codeUnitAt(0) * base * base;
   Node(String name, String leftName, String rightName) {
     if (name.length != 3) {
       print("[ERROR] Node value lenght must be 3, got: '$name'");
@@ -18,7 +16,6 @@ class Node {
       exit(1);
     }
     _name = name;
-    _value = Node.valueFromName(name);
     _leftName = leftName;
     _rightName = rightName;
   }
@@ -42,7 +39,6 @@ class Node {
   String toString() => "$name = ($leftName, $rightName)";
 
   String get name => _name;
-  int get value => _value;
   String get leftName => _leftName;
   String get rightName => _rightName;
   Node? get leftNode => _leftNode;
@@ -51,7 +47,6 @@ class Node {
   set leftNode(Node? value) { _leftNode = value; }
   set rightNode(Node? value) { _rightNode = value; }
 
-  int _value = 0;
   String _name = "";
   String _leftName = "";
   String _rightName = "";
